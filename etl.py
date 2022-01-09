@@ -1,7 +1,7 @@
 """ 
-Sparkify ETL process to load JSON files into AWS Redshift
+Sparkify ETL process to load JSON files in S3 into Redshift
 
-Note: run create_tables.py before runnign this script
+Note: run create_tables.py before running this script
 """
 
 # import libraries
@@ -13,12 +13,26 @@ from sql_queries import copy_table_queries, insert_table_queries
 
 
 def load_staging_tables(cur, conn):
+    """
+    Load data into staging tables from S3 source
+
+    Args:
+        cur (psycopg2.extensions.cursor): Redshift DWH cursor
+        conn (psycopg2.extensions.connection): Redshift DWH connection
+    """
     for query in copy_table_queries:
         cur.execute(query)
         conn.commit()
 
 
 def insert_tables(cur, conn):
+    """
+    Load data into analytics tables from staging tables
+
+    Args:
+        cur (psycopg2.extensions.cursor): Redshift DWH cursor
+        conn (psycopg2.extensions.connection): Redshift DWH connection
+    """
     for query in insert_table_queries:
         cur.execute(query)
         conn.commit()
@@ -26,10 +40,10 @@ def insert_tables(cur, conn):
 
 def main():
     """
-    Sparkify ETL to load data
+    Sparkify ETL to load data for analytics
 
-    1. Load song data from JSON files on S3
-    2. Load log data from JSON files on S3
+    1. Load song and log data from JSON files on S3 into staging
+    2. Load staging data into analytics table in DWH
     """
 
     config = configparser.ConfigParser()

@@ -1,9 +1,10 @@
 """
-Sparkify Data ETL for Postgres DB
+Sparkify Data ETL for AWS Redshift
 
-This file will create or recreate the database and tables each time.
+This file will drop and create the required staging and analytics tables.
 """
 
+# import libraries
 import configparser
 import psycopg2
 
@@ -31,10 +32,9 @@ def create_tables(cur, conn):
 
 def main():
     """
-    - Drops (if exists) and Creates the sparkify database.
-    - Establishes connection with the sparkify database and gets cursor to it.
-    - Drops all the tables.
-    - Creates all tables needed.
+    - Load config and connect to Redshift.
+    - Drop tables if they exists.
+    - Create all tables needed.
     - Finally, closes the connection.
     """
 

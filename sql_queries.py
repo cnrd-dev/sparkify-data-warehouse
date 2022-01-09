@@ -1,22 +1,20 @@
 """
-Redshift queries for Sparkify DB
+Redshift queries for Sparkify DWH
 
 Queries are:
 - Drop existing tables
 - Create required tables
 - Insert record queries
-- Select queries
 """
 
 # import libraries
 import configparser
 
-
-# load AWS Redshift config
+# load Redshift config
 config = configparser.ConfigParser()
 config.read("dwh.cfg")
 
-# drop tables if they exist
+# drop table queries if they exist
 staging_events_table_drop = "DROP TABLE IF EXISTS staging_events;"
 staging_songs_table_drop = "DROP TABLE IF EXISTS staging_songs;"
 
@@ -26,7 +24,7 @@ song_table_drop = "DROP TABLE IF EXISTS songs;"
 artist_table_drop = "DROP TABLE IF EXISTS artists;"
 time_table_drop = "DROP TABLE IF EXISTS time;"
 
-# create tables
+# create table queries
 staging_events_table_create = """
 CREATE TABLE IF NOT EXISTS staging_events 
     (
@@ -45,12 +43,11 @@ CREATE TABLE IF NOT EXISTS staging_events
         sessionId       INT,
         song            VARCHAR,
         status          INT,
-        ts              NUMERIC,
+        ts              VARCHAR,
         userAgent       VARCHAR,
         userId          INT
     );
 """
-
 
 staging_songs_table_create = """
 CREATE TABLE IF NOT EXISTS staging_songs 
@@ -68,11 +65,11 @@ CREATE TABLE IF NOT EXISTS staging_songs
     );
 """
 
-# fact table
+# create fact table query
 songplay_table_create = """
 CREATE TABLE IF NOT EXISTS songplays 
     (
-        songplay_id VARCHAR, 
+        songplay_id INT IDENTITY(0,1) PRIMARY KEY, 
         start_time  TIMESTAMP, 
         user_id     INT, 
         level       VARCHAR, 
@@ -84,7 +81,7 @@ CREATE TABLE IF NOT EXISTS songplays
     );
 """
 
-# dimention tables
+# create dimension table queries
 user_table_create = """
 CREATE TABLE IF NOT EXISTS users 
     (
@@ -131,7 +128,7 @@ CREATE TABLE IF NOT EXISTS time
     );
 """
 
-# STAGING TABLES
+# copy data to staging queries
 
 staging_events_copy = (
     """
@@ -147,11 +144,12 @@ staging_songs_copy = (
     """
     copy staging_songs from {}
     credentials 'aws_iam_role={}'
-    region 'us-west-2';
+    region 'us-west-2'
+    format as json 'auto';
 """
 ).format(config.get("S3", "SONG_DATA"), config.get("IAM_ROLE", "ARN"))
 
-# FINAL TABLES
+# insert staging data into analytics table queries
 
 songplay_table_insert = """
 INSERT INTO songplays 
@@ -165,17 +163,21 @@ INSERT INTO songplays
         location, 
         user_agent
     )
-    VALUES 
     (
-        %s, 
-        %s, 
-        %s, 
-        %s, 
-        %s, 
-        %s, 
-        %s, 
-        %s
-    )
+        SELECT  TIMESTAMP 'epoch' + e.ts/1000 * interval '1 second' as start_time,
+                e.userId,
+                e.level,
+                s.song_id,
+                s.artist_id,
+                e.sessionId,
+                e.location,
+                e.userAgent
+        FROM staging_events e, staging_songs s
+        WHERE e.page = 'NextSong'
+        AND e.song = s.title
+        AND e.artist = s.artist_name
+        AND e.length = s.duration
+    );
 """
 
 user_table_insert = """
@@ -187,24 +189,15 @@ INSERT INTO users
         gender, 
         level
     )
-    VALUES 
-    (
-        %s, 
-        %s, 
-        %s, 
-        %s, 
-        %s
-    )
-    ON CONFLICT 
-    (
-        user_id
-    ) 
-    DO UPDATE
-    SET 
-        first_name = EXCLUDED.first_name, 
-        last_name = EXCLUDED.last_name, 
-        gender = EXCLUDED.gender, 
-        level = EXCLUDED.level;
+    ( 
+        SELECT DISTINCT     userId,
+                            firstName,
+                            lastName,
+                            gender,
+                            level
+        FROM staging_events
+        WHERE page = 'NextSong'
+    );
 """
 
 song_table_insert = """
@@ -216,19 +209,15 @@ INSERT INTO songs
         year, 
         duration
     )
-    VALUES 
     (
-        %s, 
-        %s, 
-        %s, 
-        %s, 
-        %s
-    )
-    ON CONFLICT 
-    (
-        song_id
-    ) 
-    DO NOTHING;
+        SELECT DISTINCT     song_id,
+                            title,
+                            artist_id,
+                            year,
+                            duration
+        FROM staging_songs
+        WHERE song_id IS NOT NULL
+    );
 """
 
 artist_table_insert = """
@@ -240,24 +229,15 @@ INSERT INTO artists
         latitude, 
         longitude
     )
-    VALUES 
     (
-        %s, 
-        %s, 
-        %s, 
-        %s, 
-        %s
-    )
-    ON CONFLICT 
-    (
-        artist_id
-    ) 
-    DO UPDATE
-    SET 
-        name = EXCLUDED.name, 
-        location = EXCLUDED.location, 
-        latitude = EXCLUDED.latitude, 
-        longitude = EXCLUDED.longitude;
+        SELECT DISTINCT artist_id,
+                        artist_name,
+                        artist_location,
+                        artist_latitude,
+                        artist_longitude
+        FROM staging_songs
+        WHERE artist_id IS NOT NULL
+    );
 """
 
 time_table_insert = """
@@ -271,25 +251,19 @@ INSERT INTO time
         year, 
         weekday
     )
-    VALUES 
     (
-        %s, 
-        %s, 
-        %s, 
-        %s, 
-        %s, 
-        %s, 
-        %s
-    )
-    ON CONFLICT 
-    (
-        start_time
-    ) 
-    DO NOTHING;
+        SELECT  start_time, 
+                EXTRACT(hour FROM start_time),
+                EXTRACT(day FROM start_time),
+                EXTRACT(week FROM start_time), 
+                EXTRACT(month FROM start_time),
+                EXTRACT(year FROM start_time), 
+                EXTRACT(dayofweek FROM start_time)
+        FROM songplays
+    );
 """
 
-# QUERY LISTS
-
+# query lists for imports
 create_table_queries = [staging_events_table_create, staging_songs_table_create, songplay_table_create, user_table_create, song_table_create, artist_table_create, time_table_create]
 drop_table_queries = [staging_events_table_drop, staging_songs_table_drop, songplay_table_drop, user_table_drop, song_table_drop, artist_table_drop, time_table_drop]
 copy_table_queries = [staging_events_copy, staging_songs_copy]
