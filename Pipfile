@@ -7,6 +7,7 @@ name = "pypi"
 pandas = "*"
 ipython-sql = "*"
 psycopg2 = "*"
+boto3 = "*"
 
 [dev-packages]
 ipykernel = "*"

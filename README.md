@@ -2,7 +2,7 @@
 
 ## Motivation
 
-The startup, Sparkify, is a music streaming app and wants to analyse what songs their users are listening to. Their current data is available as local JSON files and cannot be easily analised. The purpose of the ETL process is to create a data model, process the JSON data in the files and load into a Postgres database.
+The startup, Sparkify, is a music streaming app and wants to analyse what songs their users are listening to. Their current data is available as local JSON files on AWS S3 and cannot be easily analised. The purpose of the ETL process is to create a data model, process the JSON data in the files and load into AWS Redshift for analytics.
 
 ## Data model
 
